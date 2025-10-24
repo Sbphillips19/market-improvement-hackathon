@@ -163,11 +163,12 @@ export async function GET(request: NextRequest) {
             });
           }
 
-          // Generate 250 synthetic trades with mix of regular and whale trades
+          // Generate 1250 synthetic trades (5x increase) with mix of regular and whale trades
           trades = [];
           let totalVolume = 0;
-          for (let i = 0; i < 250; i++) {
-            const timestamp = new Date(now.getTime() - i * 15 * 60 * 1000); // Every 15 minutes
+          const numTrades = 1250;
+          for (let i = 0; i < numTrades; i++) {
+            const timestamp = new Date(now.getTime() - i * 3 * 60 * 1000); // Every 3 minutes (more frequent)
             const side = Math.random() > 0.5 ? 'buy' : 'sell';
 
             // 35% chance of whale trade (>$1000), otherwise regular trade
@@ -180,7 +181,7 @@ export async function GET(request: NextRequest) {
             const tradeOutcome = Math.random() > 0.5 ? outcomes[0] : outcomes[1];
 
             // Use price from corresponding historical point if available
-            const priceIndex = Math.floor((i / 250) * historicalPrices.length);
+            const priceIndex = Math.floor((i / numTrades) * historicalPrices.length);
             const referencePrice = historicalPrices[priceIndex]?.price || currentPrice;
             const price = Math.max(0.01, Math.min(0.99, referencePrice + (Math.random() - 0.5) * 0.03));
 

@@ -57,11 +57,11 @@ export default function Home() {
       // EXTREME data load for comprehensive backtesting
       // Disable subgraph temporarily for faster loading
       console.log('Fetching unresolved markets...');
-      const unresolvedRes = await axios.get('/api/data?limit=100&resolved=false&useSubgraph=false', { timeout: 90000 });
+      const unresolvedRes = await axios.get('/api/data?limit=500&resolved=false&useSubgraph=false', { timeout: 120000 });
       console.log('✅ Unresolved markets fetched');
 
-      console.log('Fetching resolved markets (loading MASSIVE dataset)...');
-      const resolvedRes = await axios.get('/api/data?limit=400&resolved=true&useSubgraph=false', { timeout: 120000 });
+      console.log('Fetching resolved markets (loading MASSIVE dataset - 2000 markets)...');
+      const resolvedRes = await axios.get('/api/data?limit=2000&resolved=true&useSubgraph=false', { timeout: 180000 });
       console.log('✅ Resolved markets fetched');
 
       console.log('✅ API Response received');
@@ -208,10 +208,14 @@ export default function Home() {
         const worstStrategyDef = currentStrategies.find((s) => s.id === worstStrategy.strategyId);
 
         if (worstStrategy && worstStrategyDef && worstStrategy.roi < 50) {
+          // Get the current code of the strategy (if it exists)
+          const currentCode = worstStrategyDef.generateBets.toString();
+
           currentLogs = [
             ...currentLogs,
             `\n🔧 Improving worst performer: ${worstStrategy.strategyName}`,
             `   Current ROI: ${worstStrategy.roi.toFixed(1)}% | Win Rate: ${worstStrategy.winRate.toFixed(1)}%`,
+            `   Total Bets: ${worstStrategy.totalBets} ${worstStrategy.totalBets === 0 ? '⚠️ GENERATING ZERO BETS!' : ''}`,
           ];
 
           setSimulation({
@@ -224,10 +228,20 @@ export default function Home() {
               strategy: worstStrategyDef,
               performance: worstStrategy,
               historicalStats,
+              currentCode: currentCode, // Pass the actual current code
+              previousEpochResults: epoch > 1 ? epochResults[epoch - 1] : null,
             },
           });
 
           const improvements = improvementResponse.data;
+
+          // Log the generated code for debugging
+          if (improvements.generateBetsCode) {
+            console.log(`\n🔍 [EPOCH ${epoch}] AI Generated Code for ${worstStrategy.strategyName}:`);
+            console.log(improvements.generateBetsCode);
+            console.log(`📊 Expected improvement: +${improvements.expectedImprovementPercent}%`);
+            console.log(`💡 Reasoning: ${improvements.reasoning}\n`);
+          }
 
           // Actually apply the improvements to the strategy
           currentStrategies = currentStrategies.map((s) => {
@@ -269,6 +283,8 @@ export default function Home() {
                   console.log(`✅ Compiled new strategy logic for ${s.name}`);
                 } catch (err) {
                   console.error(`❌ Failed to compile strategy code:`, err);
+                  console.error(`Code that failed:`, improvements.generateBetsCode);
+                  currentLogs = [...currentLogs, `   ❌ ERROR: Code compilation failed - ${err.message}`];
                 }
               }
 
@@ -283,6 +299,7 @@ export default function Home() {
             `   ✅ Applied improvements:`,
             `   ${improvements.reasoning}`,
             `   Expected improvement: +${improvements.expectedImprovementPercent}%`,
+            improvements.generateBetsCode ? `   📝 Generated ${improvements.generateBetsCode.length} chars of new code` : `   ⚠️ No new code generated - only parameter changes`,
           ];
 
           setSimulation({
@@ -307,6 +324,13 @@ export default function Home() {
           });
 
           const newStrategy = newStrategyResponse.data;
+
+          // Log the new strategy code
+          if (newStrategy.generateBetsCode) {
+            console.log(`\n🤖 [EPOCH ${epoch}] NEW AI Strategy: ${newStrategy.strategyName}`);
+            console.log(newStrategy.generateBetsCode);
+            console.log(`📊 Expected ROI: ${newStrategy.expectedROI}%\n`);
+          }
 
           // Add the new AI-generated strategy to the strategy pool
           const aiStrategy: Strategy = {
@@ -348,9 +372,10 @@ export default function Home() {
               };
 
               console.log(`✅ Compiled AI strategy: ${newStrategy.strategyName}`);
-            } catch (err) {
+            } catch (err: any) {
               console.error(`❌ Failed to compile AI strategy code:`, err);
-              currentLogs = [...currentLogs, `   ⚠️ Warning: Strategy code compilation failed`];
+              console.error(`Code that failed:`, newStrategy.generateBetsCode);
+              currentLogs = [...currentLogs, `   ⚠️ Warning: Strategy code compilation failed - ${err.message}`];
             }
           }
 
@@ -383,30 +408,80 @@ export default function Home() {
 
     // Final summary
     const finalLogs = [...currentLogs];
-    finalLogs.push('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    finalLogs.push('🎉 SIMULATION COMPLETE!');
-    finalLogs.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    finalLogs.push('\n📈 Final Performance Summary:');
+    finalLogs.push('\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    finalLogs.push('🎉 SIMULATION COMPLETE - AI SELF-IMPROVEMENT RESULTS');
+    finalLogs.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    // Training Stats
+    const totalTrades = markets.reduce((acc, m) => acc + m.trades.length, 0);
+    finalLogs.push(`\n📊 Training Dataset:`);
+    finalLogs.push(`   • Total Markets: ${markets.length.toLocaleString()}`);
+    finalLogs.push(`   • Total Trades: ${totalTrades.toLocaleString()}`);
+    finalLogs.push(`   • Epochs Completed: ${epochs}`);
+    finalLogs.push(`   • Strategies Generated: ${currentStrategies.length}`);
 
     // Compare first epoch to last epoch
     const firstEpochResults = epochResults[1] || [];
     const lastEpochResults = epochResults[epochs] || [];
 
+    finalLogs.push('\n📈 STRATEGY PERFORMANCE - BEFORE vs AFTER:');
+    finalLogs.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    // Track overall improvements
+    let totalRoiImprovement = 0;
+    let totalWinRateImprovement = 0;
+    let strategiesImproved = 0;
+    let strategiesWorsened = 0;
+
     firstEpochResults.forEach((firstResult) => {
       const lastResult = lastEpochResults.find(r => r.strategyId === firstResult.strategyId);
       if (lastResult) {
         const roiImprovement = lastResult.roi - firstResult.roi;
-        const improvementIcon = roiImprovement > 0 ? '✅' : roiImprovement < 0 ? '⚠️' : '➡️';
+        const winRateImprovement = lastResult.winRate - firstResult.winRate;
+        const profitImprovement = lastResult.netProfit - firstResult.netProfit;
+
+        totalRoiImprovement += roiImprovement;
+        totalWinRateImprovement += winRateImprovement;
+
+        if (roiImprovement > 0) strategiesImproved++;
+        if (roiImprovement < 0) strategiesWorsened++;
+
+        const improvementIcon = roiImprovement > 5 ? '🚀' : roiImprovement > 0 ? '✅' : roiImprovement < 0 ? '📉' : '➡️';
 
         finalLogs.push(`\n${improvementIcon} ${lastResult.strategyName}:`);
-        finalLogs.push(`   Initial ROI: ${firstResult.roi.toFixed(1)}% → Final ROI: ${lastResult.roi.toFixed(1)}%`);
-        finalLogs.push(`   Improvement: ${roiImprovement > 0 ? '+' : ''}${roiImprovement.toFixed(1)}%`);
-        finalLogs.push(`   Final Stats: ${lastResult.totalBets} bets, ${lastResult.winRate.toFixed(1)}% win rate, $${lastResult.netProfit.toFixed(2)} profit`);
+        finalLogs.push('   ┌─ EPOCH 1 (Initial):');
+        finalLogs.push(`   │  ROI: ${firstResult.roi.toFixed(1)}% | Win Rate: ${firstResult.winRate.toFixed(1)}% | Profit: $${firstResult.netProfit.toFixed(2)} | Bets: ${firstResult.totalBets}`);
+        finalLogs.push('   └─ EPOCH ' + epochs + ' (Final):');
+        finalLogs.push(`      ROI: ${lastResult.roi.toFixed(1)}% | Win Rate: ${lastResult.winRate.toFixed(1)}% | Profit: $${lastResult.netProfit.toFixed(2)} | Bets: ${lastResult.totalBets}`);
+        finalLogs.push('   ');
+        finalLogs.push(`   📊 Improvements:`);
+        finalLogs.push(`      • ROI Change: ${roiImprovement > 0 ? '+' : ''}${roiImprovement.toFixed(1)}%`);
+        finalLogs.push(`      • Win Rate Change: ${winRateImprovement > 0 ? '+' : ''}${winRateImprovement.toFixed(1)}%`);
+        finalLogs.push(`      • Profit Change: ${profitImprovement > 0 ? '+' : ''}$${profitImprovement.toFixed(2)}`);
       }
     });
 
-    finalLogs.push(`\n🧠 Total Strategies Generated: ${currentStrategies.length}`);
-    finalLogs.push(`💡 AI learned from ${markets.length} markets with ${markets.reduce((acc, m) => acc + m.trades.length, 0).toLocaleString()} trades`);
+    // New strategies that didn't exist in epoch 1
+    const newStrategies = lastEpochResults.filter(r => !firstEpochResults.find(f => f.strategyId === r.strategyId));
+    if (newStrategies.length > 0) {
+      finalLogs.push('\n\n🤖 NEW AI-GENERATED STRATEGIES:');
+      finalLogs.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      newStrategies.forEach((strategy) => {
+        finalLogs.push(`\n✨ ${strategy.strategyName}:`);
+        finalLogs.push(`   ROI: ${strategy.roi.toFixed(1)}% | Win Rate: ${strategy.winRate.toFixed(1)}% | Profit: $${strategy.netProfit.toFixed(2)} | Bets: ${strategy.totalBets}`);
+      });
+    }
+
+    // Overall Summary
+    finalLogs.push('\n\n🎯 OVERALL IMPROVEMENT SUMMARY:');
+    finalLogs.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    finalLogs.push(`   Strategies Improved: ${strategiesImproved}`);
+    finalLogs.push(`   Strategies Worsened: ${strategiesWorsened}`);
+    if (firstEpochResults.length > 0) {
+      finalLogs.push(`   Average ROI Change: ${(totalRoiImprovement / firstEpochResults.length).toFixed(1)}%`);
+      finalLogs.push(`   Average Win Rate Change: ${(totalWinRateImprovement / firstEpochResults.length).toFixed(1)}%`);
+    }
+    finalLogs.push(`\n🧠 The AI evolved ${currentStrategies.length} total strategies through ${epochs} epochs of learning!`);
 
     setSimulation({
       isRunning: false,

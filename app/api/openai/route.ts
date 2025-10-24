@@ -102,7 +102,7 @@ Return ONLY valid JSON (no markdown):
       const strategy = JSON.parse(completion.choices[0].message.content || '{}');
       return NextResponse.json(strategy);
     } else if (action === 'improve_strategy') {
-      const { strategy, performance, historicalStats } = data;
+      const { strategy, performance, historicalStats, currentCode, previousEpochResults } = data;
 
       const prompt = `You are optimizing a Polymarket trading strategy.
 
@@ -117,11 +117,20 @@ Performance:
 - ROI: ${performance.roi.toFixed(1)}%
 - Net Profit: $${performance.netProfit.toFixed(2)}
 - Total Bets: ${performance.totalBets}
+${performance.totalBets === 0 ? '\n⚠️ CRITICAL ISSUE: Strategy is generating ZERO bets! The filters are TOO RESTRICTIVE.\nYou MUST loosen the restrictions significantly to generate bets.\n' : ''}
 
 Market Context:
 - Total markets: ${historicalStats?.totalMarkets || 'N/A'}
 - Resolved markets: ${historicalStats?.resolvedMarkets || 'N/A'}
 - Avg volume: $${historicalStats?.avgVolume?.toFixed(0) || 'N/A'}
+
+${currentCode ? `CURRENT CODE (that you previously generated):
+\`\`\`javascript
+${currentCode}
+\`\`\`
+
+${performance.totalBets === 0 ? 'This code is generating ZERO bets. Analyze it and identify why all markets are being filtered out.' : ''}
+` : ''}
 
 TASK: Generate IMPROVED executable strategy code that fixes the weaknesses and boosts ROI.
 
@@ -162,10 +171,11 @@ return bets;
 \`\`\`
 
 2. Make SIGNIFICANT changes to improve performance (${performance.roi.toFixed(1)}% ROI is ${performance.roi < 20 ? 'poor' : 'mediocre'})
-3. If ROI is negative, completely rethink the approach
-4. Add filters for liquidity, volume, price patterns, whale behavior, etc.
-5. Be more selective - quality over quantity
+3. If ROI is negative or 0 bets, completely rethink the approach
+4. ${performance.totalBets === 0 ? '⚠️ CRITICAL: LOOSEN all filters! You filtered out ALL markets. Start with BASIC filters only (e.g., just market.liquidity > 10000 && relevantTrades.length > 10). Then add complexity gradually.' : 'Add smart filters for liquidity, volume, price patterns, whale behavior'}
+5. ${performance.totalBets === 0 ? 'Target AT LEAST 50-200 bets across all test markets' : 'Balance quality vs quantity - aim for 50-300 bets'}
 6. Available utilities: clampPrice(price), mean(array), sortBy(array, fn), Math, Date
+7. ${performance.totalBets === 0 ? '⚠️ DO NOT use multiple AND conditions that filter out everything! Start simple.' : 'Be strategic with filter combinations'}
 
 Return ONLY valid JSON:
 {

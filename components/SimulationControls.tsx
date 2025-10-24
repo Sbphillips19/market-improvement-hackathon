@@ -62,9 +62,9 @@ export function SimulationControls({ simulation, onStartSimulation }: Props) {
         {simulation.logs.length > 0 && (
           <Alert>
             <AlertDescription>
-              <div className="max-h-40 overflow-y-auto space-y-1">
-                {simulation.logs.slice(-10).map((log, i) => (
-                  <div key={i} className="text-xs font-mono">
+              <div className="max-h-[600px] overflow-y-auto space-y-1">
+                {simulation.logs.map((log, i) => (
+                  <div key={i} className="text-xs font-mono whitespace-pre-wrap">
                     {log}
                   </div>
                 ))}
